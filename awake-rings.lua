@@ -1,6 +1,9 @@
--- awake: time changes
--- 2.0.0 @tehn
+-- awake-rings: time changes
+-- Original by @tehn
+-- Adapted by @gonecaving
 -- llllllll.co/t/21022
+--
+-- Requires the "we" package
 --
 -- top loop plays notes
 -- transposed by bottom loop
