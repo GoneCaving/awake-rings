@@ -1,4 +1,6 @@
-ilocal BeatClockCrow = {}
+-- @dan_derks BeatClock Crow from the main Awake script
+
+local BeatClockCrow = {}
 BeatClockCrow.__index = BeatClockCrow
 
 function BeatClockCrow.new(name)
