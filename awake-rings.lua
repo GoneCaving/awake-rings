@@ -1,4 +1,5 @@
 -- awake-rings: time changes
+-- 2.4.0
 -- Original by @tehn
 -- Adapted by @gonecaving
 -- llllllll.co/t/21022
@@ -33,20 +34,19 @@
 -- *toggle
 -- E2/E3 changes
 
+
 engine.name = 'KarplusRings'
 
 hs = include('lib/halfsecond')
 
-local MusicUtil = require "musicutil"
+MusicUtil = require "musicutil"
 
-local options = {}
-options.OUTPUT = {"audio", "midi", "audio + midi", "crow out 1+2", "crow ii JF", "crow ii JF + cv"}
-options.STEP_LENGTH_NAMES = {"1 bar", "1/2", "1/3", "1/4", "1/6", "1/8", "1/12", "1/16", "1/24", "1/32", "1/48", "1/64"}
-options.STEP_LENGTH_DIVIDERS = {1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64}
+options = {}
+options.OUTPUT = {"audio", "midi", "audio + midi", "crow out 1+2", "crow ii JF"}
 
-local g = grid.connect()
+g = grid.connect()
 
-local alt = false
+alt = false
 
 mode = 1
 mode_names = {"STEP","LOOP","SOUND","OPTION"}
@@ -54,53 +54,43 @@ mode_names = {"STEP","LOOP","SOUND","OPTION"}
 one = {
   pos = 0,
   length = 8,
-  start = 1,
   data = {1,0,3,5,6,7,8,7,0,0,0,0,0,0,0,0}
 }
 two = {
   pos = 0,
   length = 7,
-  start = 1,
   data = {5,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
 }
 
 function add_pattern_params()
   params:add_separator()
+  params:add_group("pattern 1", 17)
 
-  params:add{type = "number", id = "one_length", name = "<one> length]", min=1, max=16,
+  params:add{type = "number", id = "one_length", name = "length", min=1, max=16,
     default = one.length,
     action=function(x) one.length = x end }
 
-  params:add{type = "number", id = "one_start", name = "<one> start]", min=1, max=16,
-    default=one.start,
-    action=function(x) one.start = x end }
-
   for i=1,16 do
-    params:add{type = "number", id= ("one_data_"..i), name = ("<one> data "..i), min=0, max=8,
+    params:add{type = "number", id= ("one_data_"..i), name = ("data "..i), min=0, max=8,
       default = one.data[i],
       action=function(x)one.data[i] = x end }
   end
 
-  params:add_separator()
+  params:add_group("pattern 2", 17)
 
-  params:add{type = "number", id = "two_length", name = "<two> length]",  min=1, max=16,
+  params:add{type = "number", id = "two_length", name = "length",  min=1, max=16,
     default = two.length,
     action=function(x)two.length = x end}
 
-  params:add{type = "number", id = "two_start", name = "<two> start]",  min=1, max=16,
-    default = two.start,
-    action=function(x)two.start = x end }
-
   for i=1,16 do
-    params:add{type = "number", id= "two_data_"..i, name = "<two> data "..i,  min=0, max=8,
+    params:add{type = "number", id= "two_data_"..i, name = "data "..i,  min=0, max=8,
       default = two.data[i],
       action=function(x) two.data[i] = x end }
   end
 
-  params:add_separator()
 end
 
-local set_loop_data = function(which, step, val)
+set_loop_data = function(which, step, val)
   params:set(which.."_data_"..step, val)
 end
 
@@ -120,14 +110,7 @@ snd_names = {"DECAY","COEF","LPFF","LPFG","BPFF","BPFR", "pan", "delay_pan"}
 snd_params = {"decay","coef","lpf freq","lpf gain","bpf freq","bpf res", "pan", "delay_pan"}
 NUM_SND_PARAMS = #snd_params
 
-local BeatClock = include 'lib/beatclock-crow'
-local clk = BeatClock.new()
-local clk_midi = midi.connect()
-clk_midi.event = function(data)
-  clk:process_midi(data)
-end
-
-local notes_off_metro = metro.init()
+notes_off_metro = metro.init()
 
 function build_scale()
   notes = MusicUtil.generate_scale_of_length(params:get("root_note"), params:get("scale_mode"), 16)
@@ -137,7 +120,7 @@ function build_scale()
   end
 end
 
-local function all_notes_off()
+function all_notes_off()
   if (params:get("output") == 2 or params:get("output") == 3) then
     for _, a in pairs(active_notes) do
       midi_out_device:note_off(a, nil, midi_out_channel)
@@ -146,7 +129,7 @@ local function all_notes_off()
   active_notes = {}
 end
 
-local function morph(loop, which)
+function morph(loop, which)
   for i=1,loop.length do
     if loop.data[i] > 0 then
       set_loop_data(which, i, util.clamp(loop.data[i]+math.floor(math.random()*3)-1,1,8))
@@ -154,129 +137,71 @@ local function morph(loop, which)
   end
 end
 
-local function random()
+function random()
   for i=1,one.length do set_loop_data("one", i, math.floor(math.random()*9)) end
   for i=1,two.length do set_loop_data("two", i, math.floor(math.random()*9)) end
 end
 
-local function step()
-  all_notes_off()
-  
-  one.pos = one.pos + 1
-  if one.pos > one.length then one.pos = 1 end
-  two.pos = two.pos + 1
-  if two.pos > two.length then two.pos = 1 end
-  
-  if one.data[one.pos] > 0 then
-    local note_num = notes[one.data[one.pos]+two.data[two.pos]]
-    local freq = MusicUtil.note_num_to_freq(note_num)
-    
-    -- Trig Probablility
-    if math.random(100) <= params:get("probability") then
-      -- Audio engine out
-      if params:get("output") == 1 or params:get("output") == 3 then
-        engine.hz(freq)
-      elseif params:get("output") == 4 then
-        crow.output[1].volts = (note_num-60)/12
-        crow.output[2].execute()
-      elseif params:get("output") == 5 then
-        crow.ii.jf.play_note((note_num-60)/12,5)
-      elseif params:get("output") == 6 then
-        crow.output[1].volts = (note_num-60)/12
-        crow.output[2].execute()
-        crow.ii.jf.play_note((note_num-60)/12,5)
-      end
-    
-      -- MIDI out
-      if (params:get("output") == 2 or params:get("output") == 3) then
-        midi_out_device:note_on(note_num, 96, midi_out_channel)
-        table.insert(active_notes, note_num)
+function step()
+  while true do
+    clock.sync(1/params:get("step_div"))
 
-        -- Note off timeout
-        if params:get("note_length") < 4 then
-          notes_off_metro:start((60 / clk.bpm / clk.steps_per_beat / 4) * params:get("note_length"), 1)
+    all_notes_off()
+
+    one.pos = one.pos + 1
+    if one.pos > one.length then one.pos = 1 end
+    two.pos = two.pos + 1
+    if two.pos > two.length then two.pos = 1 end
+
+    if one.data[one.pos] > 0 then
+      local note_num = notes[one.data[one.pos]+two.data[two.pos]]
+      local freq = MusicUtil.note_num_to_freq(note_num)
+
+      -- Trig Probablility
+      if math.random(100) <= params:get("probability") then
+        -- Audio engine out
+        if params:get("output") == 1 or params:get("output") == 3 then
+          engine.hz(freq)
+        elseif params:get("output") == 4 then
+          crow.output[1].volts = (note_num-60)/12
+          crow.output[2].execute()
+        elseif params:get("output") == 5 then
+          crow.ii.jf.play_note((note_num-60)/12,5)
+        end
+
+        -- MIDI out
+        if (params:get("output") == 2 or params:get("output") == 3) then
+          midi_out_device:note_on(note_num, 96, midi_out_channel)
+          table.insert(active_notes, note_num)
+
+          -- Note off timeout
+          if params:get("note_length") < 4 then
+            notes_off_metro:start((60 / clk.bpm / clk.steps_per_beat / 4) * params:get("note_length"), 1)
+          end
         end
       end
     end
-  end
 
-  if params:get("crow_clock_out") == 2 then crow.output[4]:execute() end
-
-  if g then
-    gridredraw()
-  end
-  redraw()
-
+    if g then
+      gridredraw()
+    end
+    redraw()
+ end
 end
 
-local function stop()
+function stop()
   all_notes_off()
 end
 
-local function crow_init()
-
-  local crow_tap = 0
-  local crow_deltatap = 1
-
-  crow.input[1].mode("change", 1, 0.05, "rising")
-  crow.input[1].change = function(s)
-    if params:get("crow_clock_input") ~= 2 then
-      morph(one, "one")
-      morph(two, "two")
-    else
-      step()
-      local crow_tap1 = util.time()
-      crow_deltatap = crow_tap1 - crow_tap
-      crow_tap = crow_tap1
-      local crow_tap_tempo = (60/crow_deltatap)/4
-      params:set("bpm",math.floor(crow_tap_tempo+0.5))
-    end
-  end
-  crow.input[2].mode("change", 1, 0.05, "rising")
-  crow.input[2].change = function()
-    if params:get("crow_clock_input") ~= 3 then
-      random()
-    else
-      step()
-    end
-  end
-
-  if params:get("output") == 4 then
-    crow.output[2].action = "{to(5,0),to(0,0.25)}"
-  end
-
-end
 
 function init()
   for i = 1, #MusicUtil.SCALES do
     table.insert(scale_names, string.lower(MusicUtil.SCALES[i].name))
   end
-  
+
   midi_out_device = midi.connect(1)
-  --midi_out_device.event = function() end
-  
-  clk.on_step = step
-  clk.on_stop = stop
-    clk.on_select_internal = function()
-    clk:start()
-    params:set("crow_clock_input",1)
-  end
-  clk.on_select_midi = function()
-    one.pos = 0
-    two.pos = 0
-    params:set("crow_clock_input",1)
-  end
-  clk.on_select_crow = function()
-    params:set("crow_clock_input",2)
-  end
-  clk:add_clock_params()
-  params:set("bpm", 91)
-  
-  params:add{type = "trigger", id = "clear_crow", name = "reset/clear crow [K3]", action = function()
-    crow.clear()
-    crow.reset()
-  end}
-  
+  midi_out_device.event = function() end
+
   notes_off_metro.event = all_notes_off
 
   params:add{type = "option", id = "output", name = "output",
@@ -284,20 +209,16 @@ function init()
     action = function(value)
       all_notes_off()
       if value == 4 then crow.output[2].action = "{to(5,0),to(0,0.25)}"
-      elseif value == 5 or value == 6then
+      elseif value == 5 then
         crow.ii.pullup(true)
         crow.ii.jf.mode(1)
       end
     end}
 
-  params:add{type = "trigger", id = "reset_jf_ii", name = "reset JF [K3]", action = function()
-    crow.ii.pullup(false)
-    crow.ii.jf.mode(0)
-    end}
-
   params:add{type = "number", id = "midi_out_device", name = "midi out device",
     min = 1, max = 4, default = 1,
     action = function(value) midi_out_device = midi.connect(value) end}
+
   params:add{type = "number", id = "midi_out_channel", name = "midi out channel",
     min = 1, max = 16, default = 1,
     action = function(value)
@@ -305,17 +226,13 @@ function init()
       midi_out_channel = value
     end}
   params:add_separator()
-  
-  params:add{type = "option", id = "step_length", name = "step length", options = options.STEP_LENGTH_NAMES, default = 8,
-    action = function(value)
-      clk.ticks_per_step = 96 / options.STEP_LENGTH_DIVIDERS[value]
-      clk.steps_per_beat = options.STEP_LENGTH_DIVIDERS[value] / 4
-      clk:bpm_change(clk.bpm)
-    end}
+
+  params:add{type = "number", id = "step_div", name = "step division", default = 4}
+
   params:add{type = "option", id = "note_length", name = "note length",
     options = {"25%", "50%", "75%", "100%"},
     default = 4}
-  
+
   params:add{type = "option", id = "scale_mode", name = "scale mode",
     options = scale_names, default = 5,
     action = function() build_scale() end}
@@ -358,13 +275,14 @@ function init()
   params:add{type="control",id="pan",controlspec=cs_PAN,
     action=function(x) engine.pan(x) end}
 
-  crow_init()
-
-  clk:start()
   hs.init()
 
   add_pattern_params()
   params:default()
+
+  clock.run(step)
+
+  norns.enc.sens(1, 8)
 end
 
 function g.key(x, y, z)
@@ -451,9 +369,9 @@ function enc(n, delta)
   elseif mode == 4 then --option
     if n==2 then
       if alt==false then
-        params:delta("bpm", delta)
+        params:delta("clock_tempo", delta)
       else
-        params:delta("step_length",delta)
+        params:delta("step_div",delta)
       end
     elseif n==3 then
       if alt==false then
@@ -501,7 +419,6 @@ function key(n,z)
     if n==2 and z==1 then
       one.pos = 0
       two.pos = 0
-      if alt==true then clk:reset() end
     elseif n==3 and z==1 then
       one.pos = math.floor(math.random()*one.length)
       two.pos = math.floor(math.random()*two.length)
@@ -585,7 +502,7 @@ function redraw()
     screen.text(alt==false and "bpm" or "div")
     screen.level(15)
     screen.move(0,40)
-    screen.text(alt==false and params:get("bpm") or params:string("step_length")) 
+    screen.text(alt==false and params:get("clock_tempo") or params:string("step_div"))
     screen.level(1)
     screen.move(0,50)
     screen.text(alt==false and "root" or "scale")
@@ -597,6 +514,5 @@ function redraw()
   screen.update()
 end
 
-function cleanup()
-  clk:stop()
+function cleanup ()
 end
