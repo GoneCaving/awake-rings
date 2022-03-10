@@ -6,7 +6,7 @@ Engine_KarplusRings : CroneEngine {
 	var freq = 440;
 	var decay = 5;
 	var coef = 0.1;
-  var lpf_freq = 3000;
+	var lpf_freq = 3000;
 	var lpf_gain = 1;
 	var bpf_freq = 2000;
 	var bpf_res = 0.3;
